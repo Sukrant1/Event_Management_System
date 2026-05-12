@@ -36,14 +36,18 @@ function MyBookings() {
   };
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    const d = new Date(dateStr);
+    const datePart = d.toLocaleDateString('en-US', {
       weekday: 'short',
-      year: 'numeric',
       month: 'short',
       day: 'numeric',
+      year: 'numeric'
+    });
+    const timePart = d.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit'
     });
+    return `${datePart} • ${timePart}`;
   };
 
   if (loading) {
@@ -78,7 +82,8 @@ function MyBookings() {
               <p className="event-desc">{booking.description}</p>
               <div className="event-meta">
                 <span>📍 {booking.location}</span>
-                <span>🎫 Booked {new Date(booking.booked_at).toLocaleDateString()}</span>
+                <span>🎟️ {booking.ticket_type ? booking.ticket_type.charAt(0).toUpperCase() + booking.ticket_type.slice(1) : 'General'}</span>
+                <span>📅 Booked {new Date(booking.booked_at).toLocaleDateString()}</span>
               </div>
               <div className="event-actions">
                 <button onClick={() => handleCancel(booking.id)} className="btn btn-sm btn-danger">

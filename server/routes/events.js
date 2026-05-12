@@ -46,15 +46,15 @@ router.get('/:id', async (req, res) => {
 // Create event (admin only)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { title, description, date, location, max_attendees } = req.body;
+    const { title, description, date, location, max_attendees, price_general, price_vip, price_premium } = req.body;
 
     if (!title || !date || !location) {
       return res.status(400).json({ message: 'Title, date, and location are required.' });
     }
 
     const [result] = await pool.query(
-      'INSERT INTO events (title, description, date, location, max_attendees, created_by) VALUES (?, ?, ?, ?, ?, ?)',
-      [title, description || '', date, location, max_attendees || 100, req.user.id]
+      'INSERT INTO events (title, description, date, location, max_attendees, created_by, price_general, price_vip, price_premium) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, description || '', date, location, max_attendees || 100, req.user.id, price_general || 0, price_vip || 0, price_premium || 0]
     );
 
     res.status(201).json({ id: result.insertId, message: 'Event created successfully.' });
@@ -67,7 +67,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // Update event (admin only)
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { title, description, date, location, max_attendees } = req.body;
+    const { title, description, date, location, max_attendees, price_general, price_vip, price_premium } = req.body;
 
     const [existing] = await pool.query('SELECT id FROM events WHERE id = ?', [req.params.id]);
     if (existing.length === 0) {
@@ -75,8 +75,8 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
     }
 
     await pool.query(
-      'UPDATE events SET title = ?, description = ?, date = ?, location = ?, max_attendees = ? WHERE id = ?',
-      [title, description, date, location, max_attendees, req.params.id]
+      'UPDATE events SET title = ?, description = ?, date = ?, location = ?, max_attendees = ?, price_general = ?, price_vip = ?, price_premium = ? WHERE id = ?',
+      [title, description, date, location, max_attendees, price_general || 0, price_vip || 0, price_premium || 0, req.params.id]
     );
 
     res.json({ message: 'Event updated successfully.' });
@@ -88,13 +88,16 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
 
 // Delete event (admin only)
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+  console.log('DELETE request received for event id:', req.params.id);
   try {
     const [existing] = await pool.query('SELECT id FROM events WHERE id = ?', [req.params.id]);
     if (existing.length === 0) {
+      console.log('Event not found.');
       return res.status(404).json({ message: 'Event not found.' });
     }
 
     await pool.query('DELETE FROM events WHERE id = ?', [req.params.id]);
+    console.log('Event deleted successfully from DB.');
     res.json({ message: 'Event deleted successfully.' });
   } catch (error) {
     console.error('Delete event error:', error);

@@ -8,7 +8,10 @@ function CreateEvent() {
     description: '',
     date: '',
     location: '',
-    max_attendees: 100
+    max_attendees: 100,
+    price_general: 0,
+    price_vip: 0,
+    price_premium: 0
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -103,6 +106,42 @@ function CreateEvent() {
                 className="form-control"
                 min="1"
                 value={form.max_attendees}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="price_general">General Ticket Price ($)</label>
+              <input
+                id="price_general"
+                name="price_general"
+                type="number"
+                className="form-control"
+                min="0"
+                value={form.price_general}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="price_vip">VIP Ticket Price ($)</label>
+              <input
+                id="price_vip"
+                name="price_vip"
+                type="number"
+                className="form-control"
+                min="0"
+                value={form.price_vip}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="price_premium">Premium Ticket Price ($)</label>
+              <input
+                id="price_premium"
+                name="price_premium"
+                type="number"
+                className="form-control"
+                min="0"
+                value={form.price_premium}
                 onChange={handleChange}
               />
             </div>

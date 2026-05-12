@@ -8,6 +8,9 @@ function Events() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [ticketType, setTicketType] = useState('general');
+  const [isProcessing, setIsProcessing] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -26,16 +29,83 @@ function Events() {
     }
   };
 
-  const handleBook = async (eventId) => {
+  const getSelectedPrice = () => {
+    if (!selectedEvent) return 0;
+    if (ticketType === 'vip') return selectedEvent.price_vip;
+    if (ticketType === 'premium') return selectedEvent.price_premium;
+    return selectedEvent.price_general;
+  };
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handleInitiatePayment = async () => {
     if (!user) {
       navigate('/login');
       return;
     }
+    const price = getSelectedPrice();
+    if (price <= 0) {
+      executeBooking();
+      return;
+    }
+
+    setIsProcessing(true);
+    const res = await loadRazorpayScript();
+    if (!res) {
+      setMessage('Razorpay SDK failed to load. Are you online?');
+      setIsProcessing(false);
+      return;
+    }
 
     try {
-      await axios.post('/bookings', { event_id: eventId });
+      const orderRes = await axios.post('/bookings/create-razorpay-order', { amount: price });
+      const order = orderRes.data;
+
+      const options = {
+        key: 'rzp_test_SngJWFIp4AMFth', // WARNING: Must be replaced with real test key!
+        amount: order.amount,
+        currency: order.currency,
+        name: 'EventHub',
+        description: `Ticket for ${selectedEvent.title}`,
+        order_id: order.id,
+        handler: function (response) {
+          executeBooking();
+        },
+        prefill: {
+          name: user.name || 'User',
+          email: user.email || 'user@example.com',
+        },
+        theme: {
+          color: '#8b5cf6'
+        }
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.open();
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Failed to open Razorpay. Check backend keys.');
+      setTimeout(() => setMessage(''), 5000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const executeBooking = async () => {
+    if (!selectedEvent) return;
+
+    try {
+      await axios.post('/bookings', { event_id: selectedEvent.id, ticket_type: ticketType });
       setMessage('Event booked successfully!');
       fetchEvents();
+      setSelectedEvent(null);
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setMessage(err.response?.data?.message || 'Booking failed.');
@@ -44,7 +114,7 @@ function Events() {
   };
 
   const handleDelete = async (eventId) => {
-    if (!window.confirm('Are you sure you want to delete this event?')) return;
+    // if (!window.confirm('Are you sure you want to delete this event?')) return;
 
     try {
       await axios.delete(`/events/${eventId}`);
@@ -52,20 +122,26 @@ function Events() {
       fetchEvents();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
-      setMessage('Delete failed.');
-      setTimeout(() => setMessage(''), 3000);
+      console.error('Delete error:', err);
+      const errorMsg = err.response?.data?.message || err.message || 'Delete failed.';
+      setMessage(`Delete failed: ${errorMsg}`);
+      setTimeout(() => setMessage(''), 5000);
     }
   };
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    const d = new Date(dateStr);
+    const datePart = d.toLocaleDateString('en-US', {
       weekday: 'short',
-      year: 'numeric',
       month: 'short',
       day: 'numeric',
+      year: 'numeric'
+    });
+    const timePart = d.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit'
     });
+    return `${datePart} • ${timePart}`;
   };
 
   const filteredEvents = events.filter(e =>
@@ -119,7 +195,7 @@ function Events() {
               <div className="event-meta">
                 <span>📍 {event.location}</span>
                 <span>👥 {event.booked_count}/{event.max_attendees}</span>
-                {event.creator_name && <span>By {event.creator_name}</span>}
+                {event.creator_name && <span>👤 {event.creator_name}</span>}
               </div>
               <div className="event-actions">
                 {user?.role === 'admin' ? (
@@ -129,16 +205,60 @@ function Events() {
                   </>
                 ) : (
                   <button
-                    onClick={() => handleBook(event.id)}
+                    onClick={() => setSelectedEvent(event)}
                     className="btn btn-sm btn-primary"
-                    disabled={event.booked_count >= event.max_attendees}
                   >
-                    {event.booked_count >= event.max_attendees ? 'Fully Booked' : 'Book Now'}
+                    View Details & Book
                   </button>
                 )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal */}
+      {selectedEvent && (
+        <div className="modal-overlay" onClick={() => setSelectedEvent(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setSelectedEvent(null)}>&times;</button>
+            <h2 style={{ marginBottom: '0.5rem' }}>{selectedEvent.title}</h2>
+            <span className="event-date">{formatDate(selectedEvent.date)}</span>
+            <p className="event-desc-full">{selectedEvent.description}</p>
+            <div className="event-meta" style={{ marginTop: '1rem', marginBottom: '1.5rem' }}>
+              <span>📍 {selectedEvent.location}</span>
+              <span>👥 {selectedEvent.booked_count}/{selectedEvent.max_attendees}</span>
+              {selectedEvent.creator_name && <span>👤 {selectedEvent.creator_name}</span>}
+            </div>
+
+            {user?.role !== 'admin' && (
+              <div className="booking-section">
+                <h3 style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>Select Ticket Type</h3>
+                <div className="ticket-options">
+                  <label>
+                    <input type="radio" name="ticket" value="general" checked={ticketType === 'general'} onChange={(e) => setTicketType(e.target.value)} />
+                    General - ${selectedEvent.price_general || 0}
+                  </label>
+                  <label>
+                    <input type="radio" name="ticket" value="vip" checked={ticketType === 'vip'} onChange={(e) => setTicketType(e.target.value)} />
+                    VIP - ${selectedEvent.price_vip || 0}
+                  </label>
+                  <label>
+                    <input type="radio" name="ticket" value="premium" checked={ticketType === 'premium'} onChange={(e) => setTicketType(e.target.value)} />
+                    Premium - ${selectedEvent.price_premium || 0}
+                  </label>
+                </div>
+                <button
+                  onClick={handleInitiatePayment}
+                  className="btn btn-primary"
+                  style={{ marginTop: '1.5rem', width: '100%' }}
+                  disabled={selectedEvent.booked_count >= selectedEvent.max_attendees || isProcessing}
+                >
+                  {isProcessing ? 'Processing...' : (selectedEvent.booked_count >= selectedEvent.max_attendees ? 'Fully Booked' : 'Proceed to Payment')}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

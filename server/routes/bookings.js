@@ -1,13 +1,42 @@
 const express = require('express');
 const pool = require('../db/connection');
 const { authenticate } = require('../middleware/auth');
+const Razorpay = require('razorpay');
 
 const router = express.Router();
+
+// Create Razorpay order
+router.post('/create-razorpay-order', authenticate, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'Valid amount is required' });
+    }
+
+    const instance = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+      key_secret: process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder',
+    });
+
+    const options = {
+      amount: Math.round(amount * 100), // amount in smallest currency unit
+      currency: "USD",
+      receipt: "rcpt_" + Date.now(),
+    };
+
+    const order = await instance.orders.create(options);
+    res.json(order);
+  } catch (error) {
+    console.error('Razorpay order error:', error);
+    res.status(500).json({ message: 'Failed to initialize payment gateway. Check Razorpay keys.' });
+  }
+});
 
 // Book an event
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { event_id } = req.body;
+    const { event_id, ticket_type } = req.body;
 
     if (!event_id) {
       return res.status(400).json({ message: 'Event ID is required.' });
@@ -42,8 +71,8 @@ router.post('/', authenticate, async (req, res) => {
 
     // Create booking
     const [result] = await pool.query(
-      'INSERT INTO bookings (user_id, event_id) VALUES (?, ?)',
-      [req.user.id, event_id]
+      'INSERT INTO bookings (user_id, event_id, ticket_type) VALUES (?, ?, ?)',
+      [req.user.id, event_id, ticket_type || 'general']
     );
 
     res.status(201).json({ id: result.insertId, message: 'Event booked successfully.' });
@@ -57,7 +86,7 @@ router.post('/', authenticate, async (req, res) => {
 router.get('/my', authenticate, async (req, res) => {
   try {
     const [bookings] = await pool.query(`
-      SELECT b.id, b.booked_at, e.id as event_id, e.title, e.description, e.date, e.location
+      SELECT b.id, b.booked_at, b.ticket_type, e.id as event_id, e.title, e.description, e.date, e.location
       FROM bookings b
       JOIN events e ON b.event_id = e.id
       WHERE b.user_id = ?

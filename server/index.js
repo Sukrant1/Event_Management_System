@@ -69,6 +69,15 @@ async function initDB() {
       )
     `);
 
+    // Add columns if they don't exist (Migration)
+    try {
+      await connection.query('ALTER TABLE events ADD COLUMN price_general DECIMAL(10,2) DEFAULT 0, ADD COLUMN price_vip DECIMAL(10,2) DEFAULT 0, ADD COLUMN price_premium DECIMAL(10,2) DEFAULT 0');
+    } catch(e) { /* ignore if already exists */ }
+    
+    try {
+      await connection.query("ALTER TABLE bookings ADD COLUMN ticket_type ENUM('general', 'vip', 'premium') DEFAULT 'general'");
+    } catch(e) { /* ignore if already exists */ }
+
     // Seed admin user if not exists (password: admin123)
     const bcrypt = require('bcryptjs');
     const [admins] = await connection.query('SELECT id FROM users WHERE email = ?', ['admin@eventmgmt.com']);

@@ -2,7 +2,7 @@
 
 A full-stack Event Management System built with the MERN stack (MySQL, Express, React, Node.js). This platform allows users to create, discover, and book events, featuring tiered pricing and integrated payment gateways.
 
-## Features
+## ✨ Features
 
 - **User Authentication:** Secure signup and login using JSON Web Tokens (JWT) and bcrypt password hashing.
 - **Event Management:** Create, view, update, and delete events.
@@ -10,7 +10,7 @@ A full-stack Event Management System built with the MERN stack (MySQL, Express, 
 - **Payment Integration:** Secure checkout flow for paid events using Razorpay.
 - **Responsive UI:** Modern and visually appealing user interface built with React and Vite.
 
-## Tech Stack
+## 🛠 Tech Stack
 
 ### Frontend
 - React 19
